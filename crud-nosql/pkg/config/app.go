@@ -9,23 +9,18 @@ import (
 )
 
 var (
-	Ctx              context.Context
-	Client           *mongo.Client
-	Db               *mongo.Database
-	BookCollection   *mongo.Collection
-	AuthorCollection *mongo.Collection
+	Ctx    context.Context
+	Client *mongo.Client
 )
 
-func Connect() {
+func Connect() mongo.Database {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://test:test@cluster0.w7ovegb.mongodb.net/?retryWrites=true&w=majority"))
 	if err != nil {
 		panic(err)
 	}
 	Client = client
-	Db = client.Database("go-crud-npsql")
-	BookCollection = Db.Collection("books")
-	AuthorCollection = Db.Collection("author")
+	return *client.Database("go-crud-npsql")
 }
 
 func Disconnect() {
