@@ -3,6 +3,7 @@ package controller
 import (
 	"crud-nosql/pkg/models"
 	"crud-nosql/pkg/utils"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -28,7 +29,9 @@ func GetBookById(w http.ResponseWriter, r *http.Request) {
 
 func CreateBook(w http.ResponseWriter, r *http.Request) {
 	book := &models.Book{}
-	utils.ParseBody(*r, book)
+	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
 	if result, err := book.CreateBook(); err == nil {
 		utils.SendResponse(w, "application/json", http.StatusOK, result)
@@ -41,7 +44,9 @@ func UpdateBook(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id := params["id"]
 	updatedBook := &models.Book{}
-	utils.ParseBody(*r, updatedBook)
+	if err := json.NewDecoder(r.Body).Decode(&updatedBook); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	if oldBook, err := models.GetBookById(id); err == nil {
 		if updatedBook.Author != "" {
 			oldBook.Author = updatedBook.Author
@@ -53,7 +58,7 @@ func UpdateBook(w http.ResponseWriter, r *http.Request) {
 			oldBook.Publication = updatedBook.Publication
 		}
 
-		if result, err := models.UpdateBook(id, oldBook); err == nil {
+		if result, err := models.UpdateBook(oldBook); err == nil {
 			utils.SendResponse(w, "application/json", http.StatusOK, result)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

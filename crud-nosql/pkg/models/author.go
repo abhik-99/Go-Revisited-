@@ -16,6 +16,13 @@ type Author struct {
 	BooksWritten uint   `bson:"numBooks,omitempty" json:"numBooks"`
 }
 
+type AuthorResponse struct {
+	Id           primitive.ObjectID `bson:"_id" json:"id"`
+	Firstname    string             `bson:"firstname" json:"firstname"`
+	Lastname     string             `bson:"lastname" json:"lastname"`
+	BooksWritten uint               `bson:"numBooks,omitempty" json:"numBooks"`
+}
+
 var (
 	authorsCollection *mongo.Collection
 	authorsCtx        context.Context
@@ -29,32 +36,32 @@ func init() {
 
 func (a *Author) CreateAuthor() (*mongo.InsertOneResult, error) {
 	a.BooksWritten = 0
-	return authorsCollection.InsertOne(authorsCtx, a)
+	return authorsCollection.InsertOne(authorsCtx, *a)
 }
 
-func GetAllAuthors() ([]Author, error) {
-	var authors []Author
+func GetAllAuthors() ([]AuthorResponse, error) {
+	var authors []AuthorResponse
 	cursor, err := authorsCollection.Find(authorsCtx, bson.D{})
 	if err != nil {
-		return nil, err
+		return authors, err
 	}
-	if err := cursor.All(authorsCtx, authors); err != nil {
-		return nil, err
+	if err := cursor.All(authorsCtx, &authors); err != nil {
+		return authors, err
 	}
 	if len(authors) == 0 {
-		return nil, fmt.Errorf("No Authors defined!")
+		return authors, fmt.Errorf("No Authors defined!")
 	}
 	return authors, nil
 }
 
-func GetAuthorById(id string) (Author, error) {
-	var author Author
+func GetAuthorById(id string) (AuthorResponse, error) {
+	var author AuthorResponse
 	obId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return author, err
 	}
 
-	err = authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
+	err = authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(&author)
 
 	if err != nil {
 		return author, err
@@ -62,9 +69,8 @@ func GetAuthorById(id string) (Author, error) {
 	return author, nil
 }
 
-func UpdateAuthor(id string, author Author) (*mongo.UpdateResult, error) {
-	obId, _ := primitive.ObjectIDFromHex(id)
-	filter := bson.D{{Key: "_id", Value: obId}}
+func UpdateAuthor(author AuthorResponse) (*mongo.UpdateResult, error) {
+	filter := bson.D{{Key: "_id", Value: author.Id}}
 	update := bson.D{{Key: "$set", Value: author}}
 
 	return authorsCollection.UpdateOne(authorsCtx, filter, update)
@@ -73,7 +79,7 @@ func UpdateAuthor(id string, author Author) (*mongo.UpdateResult, error) {
 func DeleteAuthorById(id string) (*mongo.DeleteResult, error) {
 	var author Author
 	obId, _ := primitive.ObjectIDFromHex(id)
-	err := authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
+	err := authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(&author)
 	if err != nil {
 		return nil, err
 	}

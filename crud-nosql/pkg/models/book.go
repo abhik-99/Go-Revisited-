@@ -16,6 +16,14 @@ type Book struct {
 	Author      string `bson:"authorId" json:"authorId"`
 }
 
+type BookResponse struct {
+	Id          primitive.ObjectID `bson:"_id" json:"id"`
+	Isbn        string             `bson:"isbn" json:"isbn"`
+	Name        string             `bson:"name" json:"name"`
+	Publication string             `bson:"pub" json:"pub"`
+	Author      string             `bson:"authorId" json:"authorId"`
+}
+
 var booksCollection *mongo.Collection
 var booksCtx context.Context
 
@@ -34,8 +42,8 @@ func (b *Book) CreateBook() (*mongo.InsertOneResult, error) {
 	}
 }
 
-func GetAllBooks() ([]Book, error) {
-	var books []Book
+func GetAllBooks() ([]BookResponse, error) {
+	var books []BookResponse
 	cursor, err := booksCollection.Find(booksCtx, bson.D{})
 	if err != nil {
 		return books, err
@@ -46,14 +54,14 @@ func GetAllBooks() ([]Book, error) {
 	return books, nil
 }
 
-func GetBookById(id string) (Book, error) {
-	var book Book
+func GetBookById(id string) (BookResponse, error) {
+	var book BookResponse
 	obId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return book, err
 	}
 
-	err = booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(book)
+	err = booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(&book)
 
 	if err != nil {
 		return book, err
@@ -61,9 +69,8 @@ func GetBookById(id string) (Book, error) {
 	return book, nil
 }
 
-func UpdateBook(id string, book Book) (*mongo.UpdateResult, error) {
-	obId, _ := primitive.ObjectIDFromHex(id)
-	filter := bson.D{{Key: "_id", Value: obId}}
+func UpdateBook(book BookResponse) (*mongo.UpdateResult, error) {
+	filter := bson.D{{Key: "_id", Value: book.Id}}
 	update := bson.D{{Key: "$set", Value: book}}
 	return booksCollection.UpdateOne(booksCtx, filter, update)
 }
@@ -71,7 +78,7 @@ func UpdateBook(id string, book Book) (*mongo.UpdateResult, error) {
 func DeleteBookById(id string) (*mongo.DeleteResult, error) {
 	var book Book
 	obId, _ := primitive.ObjectIDFromHex(id)
-	err := booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(book)
+	err := booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(&book)
 	if err != nil {
 		return nil, err
 	}
