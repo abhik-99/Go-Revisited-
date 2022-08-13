@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"crud-nosql/pkg/config"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -12,7 +13,7 @@ import (
 type Author struct {
 	Firstname    string `bson:"firstname" json:"firstname"`
 	Lastname     string `bson:"lastname" json:"lastname"`
-	BooksWritten uint   `bson:"numBooks" json:"numBooks"`
+	BooksWritten uint   `bson:"numBooks,omitempty" json:"numBooks"`
 }
 
 var (
@@ -26,57 +27,88 @@ func init() {
 	authorsCtx = config.Ctx
 }
 
-func (a *Author) CreateAuthor() *mongo.InsertOneResult {
-	result, err := authorsCollection.InsertOne(authorsCtx, a)
-	if err != nil {
-		panic(err)
-	}
-	return result
+func (a *Author) CreateAuthor() (*mongo.InsertOneResult, error) {
+	a.BooksWritten = 0
+	return authorsCollection.InsertOne(authorsCtx, a)
 }
 
-func GetAllAuthors() []Author {
+func GetAllAuthors() ([]Author, error) {
 	var authors []Author
 	cursor, err := authorsCollection.Find(authorsCtx, bson.D{})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err := cursor.All(authorsCtx, authors); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return authors
+	if len(authors) == 0 {
+		return nil, fmt.Errorf("No Authors defined!")
+	}
+	return authors, nil
 }
 
-func GetAuthorById(id string) Author {
+func GetAuthorById(id string) (Author, error) {
 	var author Author
 	obId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		panic(err)
+		return author, err
 	}
 
 	err = authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
 
 	if err != nil {
-		panic(err)
+		return author, err
 	}
-	return author
+	return author, nil
 }
 
-func UpdateAuthor(id string, author Author) *mongo.UpdateResult {
+func UpdateAuthor(id string, author Author) (*mongo.UpdateResult, error) {
 	obId, _ := primitive.ObjectIDFromHex(id)
 	filter := bson.D{{Key: "_id", Value: obId}}
 	update := bson.D{{Key: "$set", Value: author}}
-	result, err := authorsCollection.UpdateOne(context.TODO(), filter, update)
-	if err != nil {
-		panic(err)
-	}
-	return result
+
+	return authorsCollection.UpdateOne(authorsCtx, filter, update)
 }
 
-func DeleteAuthorById(id string) *mongo.DeleteResult {
+func DeleteAuthorById(id string) (*mongo.DeleteResult, error) {
+	var author Author
 	obId, _ := primitive.ObjectIDFromHex(id)
-	result, err := authorsCollection.DeleteOne(authorsCtx, bson.M{"_id": obId})
+	err := authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return result
+	if author.BooksWritten != 0 {
+		return nil, fmt.Errorf("Author has atleast 1 book in store!")
+	}
+	return authorsCollection.DeleteOne(authorsCtx, bson.M{"_id": obId})
+}
+
+func IncrementAuthorBookCount(id string) (*mongo.UpdateResult, error) {
+	var author Author
+	obId, _ := primitive.ObjectIDFromHex(id)
+	err := authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
+	if err != nil {
+		return nil, err
+	}
+	author.BooksWritten += 1
+
+	filter := bson.D{{Key: "_id", Value: obId}}
+	update := bson.D{{Key: "$set", Value: author}}
+
+	return authorsCollection.UpdateOne(authorsCtx, filter, update)
+}
+
+func DecrementAuthorBookCount(id string) (*mongo.UpdateResult, error) {
+	var author Author
+	obId, _ := primitive.ObjectIDFromHex(id)
+	err := authorsCollection.FindOne(authorsCtx, bson.M{"_id": obId}).Decode(author)
+	if err != nil {
+		return nil, err
+	}
+	author.BooksWritten -= 1
+
+	filter := bson.D{{Key: "_id", Value: obId}}
+	update := bson.D{{Key: "$set", Value: author}}
+
+	return authorsCollection.UpdateOne(authorsCtx, filter, update)
 }

@@ -10,10 +10,10 @@ import (
 )
 
 type Book struct {
-	Isbn        string  `bson:"isbn" json:"isbn"`
-	Name        string  `bson:"name" json:"name"`
-	Publication string  `bson:"pub" json:"pub"`
-	Author      *Author `bson:"author" json:"author"`
+	Isbn        string `bson:"isbn" json:"isbn"`
+	Name        string `bson:"name" json:"name"`
+	Publication string `bson:"pub" json:"pub"`
+	Author      string `bson:"authorId" json:"authorId"`
 }
 
 var booksCollection *mongo.Collection
@@ -25,57 +25,59 @@ func init() {
 	booksCtx = config.Ctx
 }
 
-func (b *Book) CreateBook() *mongo.InsertOneResult {
-	result, err := booksCollection.InsertOne(booksCtx, b)
-	if err != nil {
-		panic(err)
+func (b *Book) CreateBook() (*mongo.InsertOneResult, error) {
+	authorId := b.Author
+	if _, err := IncrementAuthorBookCount(authorId); err != nil {
+		return booksCollection.InsertOne(booksCtx, b)
+	} else {
+		return nil, err
 	}
-	return result
 }
 
-func GetAllBooks() []Book {
+func GetAllBooks() ([]Book, error) {
 	var books []Book
 	cursor, err := booksCollection.Find(booksCtx, bson.D{})
 	if err != nil {
-		panic(err)
+		return books, err
 	}
 	if err := cursor.All(booksCtx, books); err != nil {
-		panic(err)
+		return books, err
 	}
-	return books
+	return books, nil
 }
 
-func GetBookById(id string) Book {
+func GetBookById(id string) (Book, error) {
 	var book Book
 	obId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		panic(err)
+		return book, err
 	}
 
 	err = booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(book)
 
 	if err != nil {
-		panic(err)
+		return book, err
 	}
-	return book
+	return book, nil
 }
 
-func UpdateBook(id string, book Book) *mongo.UpdateResult {
+func UpdateBook(id string, book Book) (*mongo.UpdateResult, error) {
 	obId, _ := primitive.ObjectIDFromHex(id)
 	filter := bson.D{{Key: "_id", Value: obId}}
 	update := bson.D{{Key: "$set", Value: book}}
-	result, err := booksCollection.UpdateOne(booksCtx, filter, update)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return booksCollection.UpdateOne(booksCtx, filter, update)
 }
 
-func DeleteBookById(id string) *mongo.DeleteResult {
+func DeleteBookById(id string) (*mongo.DeleteResult, error) {
+	var book Book
 	obId, _ := primitive.ObjectIDFromHex(id)
-	result, err := booksCollection.DeleteOne(booksCtx, bson.M{"_id": obId})
+	err := booksCollection.FindOne(booksCtx, bson.M{"_id": obId}).Decode(book)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return result
+	if _, err := DecrementAuthorBookCount(book.Author); err != nil {
+		return booksCollection.DeleteOne(booksCtx, bson.M{"_id": obId})
+	} else {
+		return nil, err
+	}
 }
